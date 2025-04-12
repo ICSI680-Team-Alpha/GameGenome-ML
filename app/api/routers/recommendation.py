@@ -3,7 +3,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 
-from app import crud
+# from app import crud
 router = APIRouter(tags=["recommendation"])
 
 @router.get("/get_recommendation/{_id}", response_class=HTMLResponse)
