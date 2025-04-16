@@ -24,8 +24,16 @@ class TestMongoDBSingleton:
         MongoDBSingleton._instance = None
         MongoDBSingleton._client = None
 
-    def test_singleton_pattern(self, reset_singleton):
+    @patch('app.core.db.MongoClient')
+    def test_singleton_pattern(self, mock_mongo_client, reset_singleton):
         """Test that MongoDBSingleton follows the singleton pattern."""
+        # Setup mock client
+        mock_client_instance = MagicMock()
+        mock_mongo_client.return_value = mock_client_instance
+        
+        # Configure the mock to successfully ping
+        mock_client_instance.admin.command.return_value = True
+        
         # Create two instances and assert they are the same object
         instance1 = MongoDBSingleton()
         instance2 = MongoDBSingleton()
