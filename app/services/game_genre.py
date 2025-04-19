@@ -4,6 +4,7 @@ import pandas as pd
 from typing import List, Dict, Any
 from app.core.db import MongoDBSingleton
 from app.core.config import settings
+from pymongo.cursor import Cursor
 
 class GameGenre:
     _instance = None
@@ -15,40 +16,32 @@ class GameGenre:
         return cls._instance
     
 
-    def get_genres(self, db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> Dict[int, Dict[str, int]]:
+    def get_genres(self, db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> Cursor:
         """Get and cache game genres."""
-        if self._genre_cache is None:
-            mongo = MongoDBSingleton()
-            database = mongo.get_database(db_name)
-            collection = database[collection_name]
+        if self._genre_cache is not None:
+            return self._genre_cache
+        mongo = MongoDBSingleton()
+        database = mongo.get_database(db_name)
+        collection = database[collection_name]
 
-            all_genres = collection.find({}, {"_id": 0})
-            
-            self._genre_cache = all_genres        
+        all_genres = collection.find({}, {"_id": 0})
+        
+        self._genre_cache = all_genres
+        print(f"Game genres loaded from {db_name}.{collection_name} and cached.")
         return self._genre_cache
     
 
-    def get_multiple_genre(self, appID_list: List[int], db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> Dict[int, Dict[str, Any]]:
+    def get_multiple_genres(self, appID_list: List[int], db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> Cursor:
         """Get multiple genres by their IDs."""
+        if appID_list is None:
+            return {}
+
         mongo = MongoDBSingleton()
         database = mongo.get_database(db_name)
         collection = database[collection_name]
 
         # Query for documents where AppID is in the provided list
         genres = collection.find({"AppID": {"$in": appID_list}})
-        
-        # Convert cursor to dictionary with AppID as key
-        result = {}
-        for genre in genres:
-            app_id = genre.get("AppID")
-            if app_id:
-                result[app_id] = genre
-        
-        return result
-    
-    ## TODO : Add a method to convert Genre to DataFrame
-    # def convert_genre_to_dataframe(self, genres: Dict[int, Dict[str, int]]) -> pd.DataFrame:
-    #     """Convert the genre dictionary to a DataFrame."""
-    #     df = pd.DataFrame.from_dict(genres, orient='index')
-    #     return df.reset_index(drop=True) if not df.empty else pd.DataFrame()
-    
+        print(f"Game genres loaded from {db_name}.{collection_name} for AppIDs: {appID_list}.")
+
+        return genres
