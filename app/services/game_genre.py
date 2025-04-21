@@ -10,13 +10,16 @@ from app.services.genre_vectorizer import GenreVectorizer
 class GameGenre:
     _instance = None
     _genre_cache = None
+    _game_ids = None
+    _feature_matrix = None
+    _normalized_matrix = None
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(GameGenre, cls).__new__(cls)
             print(f"Loading game genres...")
-            cls._genre_cache = cls._instance.get_genres()
-            print(f"Game genres loaded and cached.")
+            cls._genre_cache, cls._game_ids, cls._feature_matrix, cls._normalized_matrix = cls._instance.get_genres()
+            print(f"Game genres loaded and cached.") 
         return cls._instance
     
 
@@ -35,8 +38,9 @@ class GameGenre:
         if df is None or df.empty:
             print("Error: No genre data available")
             return None
-
-        return df
+        game_ids, feature_matrix = genreVectorizer.build_game_feature_matrix(df)
+        normalized_matrix = genreVectorizer.normalize_matrix(feature_matrix)
+        return df, game_ids, feature_matrix, normalized_matrix
     
 
     def get_multiple_genres(self, appID_list: List[int], db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> List:
@@ -49,7 +53,7 @@ class GameGenre:
         collection = database[collection_name]
 
         # Query for documents where AppID is in the provided list
-        genres = collection.find({"AppID": {"$in": appID_list}})
+        genres = collection.find({"AppID": {"$in": appID_list}}, {"_id": 0}).sort("AppID", 1)
         print(f"Game genres loaded from {db_name}.{collection_name} for AppIDs: {appID_list}.")
 
         return genres
