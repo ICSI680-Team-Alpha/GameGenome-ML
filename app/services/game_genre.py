@@ -4,7 +4,6 @@ import pandas as pd
 from typing import List, Dict, Any
 from app.core.db import MongoDBSingleton
 from app.core.config import settings
-from app.services.genre_vectorizer import GenreVectorizer
 
 
 class GameGenre:
@@ -33,6 +32,7 @@ class GameGenre:
 
         all_genres = collection.find({}, {"_id": 0}).sort("AppID", 1)
         
+        from app.services.genre_vectorizer import GenreVectorizer
         genreVectorizer = GenreVectorizer()
         df = genreVectorizer.vectorize_game(all_genres)
         if df is None or df.empty:
@@ -43,9 +43,9 @@ class GameGenre:
         return df, game_ids, feature_matrix, normalized_matrix
     
 
-    def get_multiple_genres(self, appID_list: List[int], db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> List:
+    def get_multiple_genres(self, app_ids: List[int], db_name: str = settings.DB_NAME, collection_name: str = "steam_genre") -> List:
         """Get multiple genres by their IDs."""
-        if appID_list is None:
+        if app_ids is None:
             return {}
 
         mongo = MongoDBSingleton()
@@ -53,7 +53,14 @@ class GameGenre:
         collection = database[collection_name]
 
         # Query for documents where AppID is in the provided list
-        genres = collection.find({"AppID": {"$in": appID_list}}, {"_id": 0}).sort("AppID", 1)
-        print(f"Game genres loaded from {db_name}.{collection_name} for AppIDs: {appID_list}.")
-
-        return genres
+        genres = collection.find({"AppID": {"$in": app_ids}}, {"_id": 0}).sort("AppID", 1)
+        
+        from app.services.genre_vectorizer import GenreVectorizer
+        genreVectorizer = GenreVectorizer()
+        df = genreVectorizer.vectorize_game(genres)
+        if df is None or df.empty:
+            print("Error: No genre data available")
+            return None
+        print(f"Game genres loaded from {db_name}.{collection_name} for AppIDs: {app_ids}.")
+        
+        return df

@@ -4,6 +4,7 @@ import numpy as np
 from typing import List, Dict, Any, Union
 import pandas as pd
 
+
 class GenreVectorizer:
     """
     Service for vectorizing game and user genre data.
@@ -12,8 +13,6 @@ class GenreVectorizer:
     """
     
     def __init__(self):
-        # self.game_genre_service = GameGenre()
-        # self.user_genre_service = UserGenre()
         self.genre_list = None
     
     def vectorize_game(self, game_data: List) -> np.ndarray:
@@ -28,33 +27,28 @@ class GenreVectorizer:
         """
         df = pd.DataFrame(game_data)
         
-        # df.drop(columns=['_id'], inplace=True, errors='ignore')
-        
         if df is None or df.empty:
             print("Error: No genre data available")
+            return None
         
-        genre_list = set()
-        genre_dict = df.iloc[0]['genre']
-        genre_list.update(genre_dict.keys())
-
+        # Create a list to store each game's genre data
+        all_genre_dicts = []
         
-        genre_matrix = pd.DataFrame(genre_dict, index=df.index)
-        ## TODO Double check if the AppID is necessary
-        genre_matrix['AppID'] = df['AppID']
+        # Process each game's genre data
+        for i, row in df.iterrows():
+            # Start with a dictionary of zeros for all genres
+            game_dict = {genre: 0 for genre in row['genre'].keys()}
+            # Fill in the actual values from the genre dictionary
+            game_dict.update(row['genre'])
+            # Add the AppID
+            game_dict['AppID'] = row['AppID']
+            # Add to our list
+            all_genre_dicts.append(game_dict)
+        
+        # Create the DataFrame all at once (much more efficient)
+        genre_matrix = pd.DataFrame(all_genre_dicts)
+        
         return genre_matrix
-    
-    def vectorize_user_preference(self, user_preference: Dict[str, Any]) -> np.ndarray:
-        """
-        Convert user preference data into a feature vector.
-        
-        Args:
-            user_preference: User preference data from database
-            
-        Returns:
-            A numpy array representing the vectorized user preferences
-        """
-        
-        return ...
     
     def build_game_feature_matrix(self, game_data) -> tuple:
         """
@@ -77,7 +71,64 @@ class GenreVectorizer:
         
         return game_ids, feature_matrix
     
-    def normalize_vectors(self, vectors: np.ndarray) -> np.ndarray:
+    def vectorize_user_preference(self, rating: list) -> np.ndarray:
+        """
+        Convert user preference data into a feature vector.
+        
+        Args:
+            user_preference: User preference data from database
+            
+        Returns:
+            A numpy array representing the vectorized user preferences
+        """
+        from app.services.game_genre import GameGenre
+        game_genre_service = GameGenre()
+        app_ids = list({int(r["AppID"]) for r in rating})
+        df = game_genre_service.get_multiple_genres(app_ids)
+        # Get the shape of the game feature matrix to ensure compatibility
+        _, feature_shape = game_genre_service._feature_matrix.shape
+        if isinstance(feature_shape, tuple):
+            feature_dim = feature_shape[1]  # If _feature_matrix.shape returns (n_games, n_features)
+        else:
+            feature_dim = feature_shape
+        user_vector = np.zeros(feature_dim)
+        # Create a mapping from AppID to DataFrame row index for quick lookup
+        app_id_to_index = {row['AppID']: i for i, row in df.iterrows()}
+        
+        # For each game the user interacted with, aggregate their preferences
+        for game_rating in rating:
+            # breakpoint()
+            app_id = game_rating.get('AppID')
+            rating_type = game_rating.get('RatingType')
+            
+            # Convert rating type to numeric value
+            rating_value = 1.0 if rating_type == 'positive' else -1.0 if rating_type == 'negative' else 0.0
+            
+            if app_id:
+                # Convert AppID to integer if it's stored as string
+                app_id = int(app_id) if isinstance(app_id, str) else app_id
+                
+                # Find the game in the DataFrame
+                if app_id in app_id_to_index:
+                    idx = app_id_to_index[app_id]
+                    # Get the game's genre vector (exclude AppID column)
+                    game_row = df.iloc[idx]
+                    game_vector = game_row.drop('AppID').values
+                    
+                    # Add weighted game vector to user preference vector
+                    user_vector += game_vector * rating_value
+        
+        # If the user has no valid ratings, return None
+        if np.all(user_vector == 0):
+            print("Warning: User has no valid ratings for vectorization")
+            return None
+        
+        # Normalize the user vector for cosine similarity
+        user_vector = self.normalize_matrix(user_vector.reshape(1, -1))[0]
+        
+        return user_vector
+    
+    def normalize_matrix(self, vectors: np.ndarray) -> np.ndarray:
         """
         Normalize feature vectors to have unit norm (for cosine similarity).
         

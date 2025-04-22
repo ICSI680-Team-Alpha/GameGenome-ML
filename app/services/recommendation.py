@@ -9,10 +9,10 @@ from sklearn.neighbors import NearestNeighbors
 
 class RecommendationService:
     def __init__(self):
-        self.game_genre = GameGenre()
+        self.game_genre_service = GameGenre()
         self.user_genre_service = UserGenre()
-        self.game_ids = self.game_genre._game_ids
-        self.normalized_matrix = self.game_genre._normalized_matrix
+        self.game_ids = self.game_genre_service._game_ids
+        self.normalized_matrix = self.game_genre_service._normalized_matrix
         self.recommender = None
         self.is_trained = False
         self.init_model()
@@ -24,4 +24,12 @@ class RecommendationService:
         if self.is_trained and not force_rebuild:
             return        
         self.recommender = NearestNeighbors(metric='cosine')
-        self.recommender.fit(self.normalized_features)
+        self.recommender.fit(self.normalized_matrix)
+
+
+    def get_recommendations_for_user(self, userID: int, stationID: int, n_recommendations: int = 5) -> list:
+        """
+        Get game recommendations for a specific user based on their preferences.
+        """
+        self.user_genre_service.get_user_vector(userID, stationID)
+        
