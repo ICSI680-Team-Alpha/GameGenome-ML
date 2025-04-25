@@ -15,7 +15,7 @@ class GenreVectorizer:
     def __init__(self):
         self.genre_list = None
     
-    def vectorize_game(self, game_data: List) -> np.ndarray:
+    def vectorize_game(self, game_data: List[Dict[str, Any]]) -> np.ndarray:
         """
         Convert a game's genre data from Cursor into a feature vector.
         
