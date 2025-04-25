@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
@@ -86,24 +86,122 @@ class TestMongoDBSingleton:
                 MongoDBSingleton()
 
     @patch('app.core.db.MongoClient')
-    def test_initialize_client_connection_failure(self, mock_mongo_client, reset_singleton):
-        """Test initialization with connection failure."""
-        # Mock the MongoClient instance
+    def test_check_connection_success(self, mock_mongo_client, reset_singleton):
+        """Test that _check_connection returns True when connection is alive."""
+        # Setup mock
         mock_client = MagicMock()
         mock_mongo_client.return_value = mock_client
+        mock_client.admin.command.return_value = True
         
-        # Mock ping command to raise ConnectionFailure
-        mock_admin = MagicMock()
-        mock_client.admin = mock_admin
-        mock_admin.command.side_effect = ConnectionFailure("Connection failed")
+        # Create instance
+        db = MongoDBSingleton()
         
-        # Reset the singleton to ensure it initializes again
-        MongoDBSingleton._instance = None
-        MongoDBSingleton._client = None
+        # Assert connection check succeeds
+        assert db._check_connection() is True
+        mock_client.admin.command.assert_called_with('ping')
+
+    @patch('app.core.db.MongoClient')
+    def test_check_connection_failure(self, mock_mongo_client, reset_singleton):
+        """Test that _check_connection returns False when connection fails."""
+        # Setup mock
+        mock_client = MagicMock()
+        mock_mongo_client.return_value = mock_client
+        mock_client.admin.command.side_effect = ConnectionFailure("Connection lost")
         
-        # Assert it raises a ConnectionFailure
-        with pytest.raises(ConnectionFailure, match="Connection failed"):
-            MongoDBSingleton()
+        # Create instance
+        db = MongoDBSingleton()
+        
+        # Reset the side effect to allow initialization
+        mock_client.admin.command.side_effect = None
+        mock_client.admin.command.return_value = True
+        
+        # Now set side effect for connection check
+        mock_client.admin.command.side_effect = ConnectionFailure("Connection lost")
+        
+        # Assert connection check fails
+        assert db._check_connection() is False
+
+    @patch('app.core.db.MongoClient')
+    @patch('app.core.db.time.sleep')
+    def test_reconnect_success_after_multiple_attempts(self, mock_sleep, mock_mongo_client, reset_singleton):
+        """Test successful reconnection after multiple attempts."""
+        # Setup mocks for initialization and reconnection attempts
+        mock_clients = [MagicMock() for _ in range(4)]
+        mock_mongo_client.side_effect = mock_clients
+        
+        # Initial client succeeds for initialization
+        mock_clients[0].admin.command.return_value = True
+        
+        # First two reconnection attempts fail
+        mock_clients[1].admin.command.side_effect = ConnectionFailure("Attempt 1 failed")
+        mock_clients[2].admin.command.side_effect = ConnectionFailure("Attempt 2 failed")
+        
+        # Third reconnection attempt succeeds
+        mock_clients[3].admin.command.return_value = True
+        
+        # Create instance
+        db = MongoDBSingleton()
+        
+        # Save original max reconnect attempts value and override for test
+        original_max_attempts = db._max_reconnect_attempts
+        db._max_reconnect_attempts = 5
+        
+        # Simulate a connection failure before reconnect
+        mock_clients[0].admin.command.side_effect = ConnectionFailure("Connection lost")
+        
+        # Call reconnect
+        result = db._reconnect()
+        
+        # Assert reconnect was successful
+        assert result is True
+        assert mock_mongo_client.call_count == 4
+        assert db._client is mock_clients[3]
+        
+        # Sleep should be called twice (after first and second failed attempts)
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_has_calls([call(db._reconnect_delay_seconds), call(db._reconnect_delay_seconds)])
+        
+        # Restore original value
+        db._max_reconnect_attempts = original_max_attempts
+
+    @patch('app.core.db.MongoClient')
+    @patch('app.core.db.time.sleep')
+    def test_reconnect_all_attempts_fail(self, mock_sleep, mock_mongo_client, reset_singleton):
+        """Test when all reconnection attempts fail."""
+        # Setup mocks for initialization and reconnection attempts
+        mock_clients = [MagicMock() for _ in range(6)]
+        mock_mongo_client.side_effect = mock_clients
+        
+        # Initial client succeeds for initialization
+        mock_clients[0].admin.command.return_value = True
+        
+        # All reconnection attempts fail
+        for i in range(1, 6):
+            mock_clients[i].admin.command.side_effect = ConnectionFailure(f"Attempt {i} failed")
+        
+        # Create instance
+        db = MongoDBSingleton()
+        
+        # Save original max reconnect attempts value and override for test
+        original_max_attempts = db._max_reconnect_attempts
+        db._max_reconnect_attempts = 5
+        
+        # Simulate a connection failure before reconnect
+        mock_clients[0].admin.command.side_effect = ConnectionFailure("Connection lost")
+        
+        # Call reconnect
+        result = db._reconnect()
+        
+        # Assert reconnect failed
+        assert result is False
+        assert mock_mongo_client.call_count == 6  # 1 initial + 5 retry attempts
+        
+        # Sleep should be called 4 times (after each failed attempt except the last)
+        assert mock_sleep.call_count == 4
+        mock_sleep.assert_has_calls([call(db._reconnect_delay_seconds)] * 4)
+        
+        # Restore original value
+        db._max_reconnect_attempts = original_max_attempts
 
     @patch('app.core.db.MongoClient')
     def test_get_client(self, mock_mongo_client, reset_singleton):
