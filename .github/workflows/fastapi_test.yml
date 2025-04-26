@@ -2,7 +2,7 @@ name: FastAPI CI
 
 on:
   push:
-    branches: [ "main", "db-connection" ]
+    branches: [ "main", "db-connection", 'content-based-recommendation-cos-simalirity' ]
   pull_request:
     branches: [ "main" ]
 
