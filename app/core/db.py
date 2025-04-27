@@ -10,6 +10,8 @@ class MongoDBSingleton:
 
     _max_reconnect_attempts = 5
     _reconnect_delay_seconds = 2
+    _last_connection_check = 0
+    _connection_check_interval = 30
     
     def __new__(cls):
         if cls._instance is None:
@@ -25,12 +27,21 @@ class MongoDBSingleton:
         try:
             # Initialize MongoDB client with connection parameters
             # Note: We're removing the extra parameters that were causing test failures
+
+
             self._client = MongoClient(
                 settings.DB_CONNECTION_STRING,
                 maxPoolSize=100,
                 minPoolSize=10,
                 maxIdleTimeMS=30000,
-                waitQueueTimeoutMS=2000
+                waitQueueTimeoutMS=2000,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=30000,
+                socketTimeoutMS=45000,
+                retryWrites=True,
+                retryReads=True,
+                # Add heartbeat frequency to check the connection status
+                heartbeatFrequencyMS=10000,
             )
             
             # Test connection
@@ -45,9 +56,13 @@ class MongoDBSingleton:
         if self._client is None:
             self._initialize_client()
 
-        if not self._check_connection():
-            if not self._reconnect():
-                raise ConnectionFailure("Cannot establish connection to MongoDB")
+        # Periodic connection check
+        current_time = time.time()
+        if current_time - self._last_connection_check > self._connection_check_interval:
+            if not self._check_connection():
+                if not self._reconnect():
+                    raise ConnectionFailure("Cannot establish connection to MongoDB")
+            self._last_connection_check = current_time
         return self._client
     
     def get_database(self, db_name: str):
@@ -89,9 +104,12 @@ class MongoDBSingleton:
                     minPoolSize=10,
                     maxIdleTimeMS=30000,
                     waitQueueTimeoutMS=2000,
-                    serverSelectionTimeoutMS=5000,
+                    serverSelectionTimeoutMS=10000,
+                    connectTimeoutMS=30000,
+                    socketTimeoutMS=45000,
                     retryWrites=True,
-                    retryReads=True
+                    retryReads=True,
+                    heartbeatFrequencyMS=10000
                 )
                 
                 # Verify connection
@@ -100,5 +118,6 @@ class MongoDBSingleton:
             except (ConnectionFailure, ServerSelectionTimeoutError) as e:
                 attempts += 1
                 if attempts < self._max_reconnect_attempts:
-                    time.sleep(self._reconnect_delay_seconds)        
+                    # TODO Exponential backoff (waiting longer between each retry)
+                    time.sleep(self._reconnect_delay_seconds)
         return False

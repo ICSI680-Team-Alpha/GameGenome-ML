@@ -54,12 +54,18 @@ class TestMongoDBSingleton:
         
         # Verify MongoClient was called with correct parameters
         mock_client.assert_called_once_with(
-            settings.DB_CONNECTION_STRING,
-            maxPoolSize=100,
-            minPoolSize=10,
-            maxIdleTimeMS=30000,
-            waitQueueTimeoutMS=2000
-        )
+                    settings.DB_CONNECTION_STRING,
+                    maxPoolSize=100,
+                    minPoolSize=10,
+                    maxIdleTimeMS=30000,
+                    waitQueueTimeoutMS=2000,
+                    serverSelectionTimeoutMS=10000,
+                    connectTimeoutMS=30000,
+                    socketTimeoutMS=45000,
+                    retryWrites=True,
+                    retryReads=True,
+                    heartbeatFrequencyMS=10000
+                )
         
         # Verify ping was called
         mock_client_instance.admin.command.assert_called_once_with('ping')
