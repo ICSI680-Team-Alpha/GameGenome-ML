@@ -33,7 +33,7 @@ class TestUserGenre:
 
     @pytest.fixture
     def mock_genre_vectorizer(self):
-        """Fixture to create a mock GenreVectorizer."""
+        """Fixture to create a mock GenreVectorizer.""" 
         vectorizer_mock = MagicMock()
         
         with patch('app.services.user_genre.GenreVectorizer', return_value=vectorizer_mock):
@@ -44,15 +44,15 @@ class TestUserGenre:
         # Arrange
         user_id = 42
         station_id = 7
-        mock_rating = {"Action": 5, "Adventure": 3, "RPG": 4}
-        expected_vector = {"genre_vector": {"Action": 0.8, "Adventure": 0.5, "RPG": 0.7}}
+        mock_rating = {"action": 5, "adventure": 3, "rpg": 4}
+        expected_vector = {"genre_vector": {"action": 0.8, "adventure": 0.5, "rpg": 0.7}}
         
         # Setup mocks
         mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
         mock_genre_vectorizer.vectorize_user_preference.return_value = expected_vector
         
         # Act
-        result = user_genre.get_user_vector(user_id, station_id)
+        result = user_genre.get_user_column_vector(user_id, station_id)
         
         # Assert
         mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
@@ -70,7 +70,7 @@ class TestUserGenre:
         
         # Act
         with patch('builtins.print') as mock_print:
-            result = user_genre.get_user_vector(user_id, station_id)
+            result = user_genre.get_user_column_vector(user_id, station_id)
         
         # Assert
         mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
@@ -89,7 +89,7 @@ class TestUserGenre:
         
         # Act & Assert
         with pytest.raises(AttributeError):
-            user_genre.get_user_vector(user_id, station_id)
+            user_genre.get_user_column_vector(user_id, station_id)
         
         mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
         mock_genre_vectorizer.vectorize_user_preference.assert_not_called()
@@ -101,8 +101,8 @@ class TestUserGenre:
         station_id = 7
         custom_db = "test_database"
         custom_collection = "test_collection"
-        mock_rating = {"Strategy": 5, "Puzzle": 4}
-        expected_vector = {"genre_vector": {"Strategy": 0.9, "Puzzle": 0.7}}
+        mock_rating = {"strategy": 5, "puzzle": 4}
+        expected_vector = {"genre_vector": {"strategy": 0.9, "puzzle": 0.7}}
         
         # Setup mocks
         mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
@@ -119,7 +119,7 @@ class TestUserGenre:
             mock_db.__getitem__.return_value = mock_collection
             mock_collection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
             
-            result = user_genre.get_user_vector(user_id, station_id, db_name=custom_db, collection_name=custom_collection)
+            result = user_genre.get_user_column_vector(user_id, station_id, db_name=custom_db, collection_name=custom_collection)
         
         # Assert
         mock_mongo.get_database.assert_called_once_with(custom_db)
@@ -135,8 +135,8 @@ class TestUserGenre:
         user_id = 42
         station_id = 7
         mock_settings.DB_NAME = "test_db"
-        mock_rating = {"Simulation": 3, "Sports": 2}
-        expected_vector = {"genre_vector": {"Simulation": 0.6, "Sports": 0.4}}
+        mock_rating = {"simulation": 3, "sports": 2}
+        expected_vector = {"genre_vector": {"simulation": 0.6, "sports": 0.4}}
         
         # Setup mocks
         mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
@@ -153,7 +153,7 @@ class TestUserGenre:
             mock_db.__getitem__.return_value = mock_collection
             mock_collection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
             
-            result = user_genre.get_user_vector(user_id, station_id)
+            result = user_genre.get_user_column_vector(user_id, station_id)
         
         # Assert
         mock_mongo.get_database.assert_called_once_with("test_db")

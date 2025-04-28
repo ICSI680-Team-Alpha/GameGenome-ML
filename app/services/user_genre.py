@@ -11,7 +11,7 @@ class UserGenre:
     def __init__(self):
         pass
     
-    def get_user_vector(self, userID: int, stationID: int, db_name: str = settings.DB_NAME, collection_name: str = "game_feedback") -> Dict[int, Dict[str, int]]:
+    def get_user_column_vector(self, userID: int, stationID: int, db_name: str = settings.DB_NAME, collection_name: str = "game_feedback") -> Dict[int, Dict[str, int]]:
         """Get and cache game genres."""
         mongo = MongoDBSingleton()
         database = mongo.get_database(db_name)
@@ -25,7 +25,6 @@ class UserGenre:
 
         genre_vectorizer_service = GenreVectorizer()
         user_vector = genre_vectorizer_service.vectorize_user_preference(rating)
-
         return user_vector
     
     
