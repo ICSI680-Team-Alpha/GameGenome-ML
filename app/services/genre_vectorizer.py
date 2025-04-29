@@ -68,7 +68,6 @@ class GenreVectorizer:
             return None, None
         game_ids = game_data['AppID'].to_numpy()
         feature_matrix = game_data.drop(columns='AppID').to_numpy()
-        
         return game_ids, feature_matrix
     
     def vectorize_user_preference(self, rating: list) -> np.ndarray:
@@ -125,7 +124,6 @@ class GenreVectorizer:
         
         # Normalize the user vector for cosine similarity
         user_vector = self.normalize_matrix(user_vector.reshape(1, -1))[0]
-        
         return user_vector
     
     def normalize_matrix(self, vectors: np.ndarray) -> np.ndarray:

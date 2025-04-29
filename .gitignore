@@ -43,3 +43,4 @@ next-env.d.ts
 .idea
 *.pyc
 test.py
+tests/recommendation_doc.py
