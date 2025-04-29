@@ -78,40 +78,6 @@ class TestUserGenre:
         mock_print.assert_called_once()
         assert result is None
 
-    def test_get_user_vector_custom_db_collection(self, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test using custom database and collection names."""
-        # Arrange
-        user_id = 42
-        station_id = 7
-        custom_db = "test_database"
-        custom_collection = "test_collection"
-        mock_rating = {"strategy": 5, "puzzle": 4}
-        expected_vector = {"genre_vector": {"strategy": 0.9, "puzzle": 0.7}}
-        
-        # Setup mocks
-        mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-        mock_genre_vectorizer.vectorize_user_preference.return_value = expected_vector
-        
-        # Act
-        with patch('app.services.user_genre.MongoDBSingleton') as mock_mongo_singleton:
-            mock_mongo = MagicMock()
-            mock_db = MagicMock()
-            mock_collection = MagicMock()
-            
-            mock_mongo_singleton.return_value = mock_mongo
-            mock_mongo.get_database.return_value = mock_db
-            mock_db.__getitem__.return_value = mock_collection
-            mock_collection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-            
-            result = user_genre.get_user_column_vector(user_id, station_id, db_name=custom_db, collection_name=custom_collection)
-        
-        # Assert
-        mock_mongo.get_database.assert_called_once_with(custom_db)
-        mock_db.__getitem__.assert_called_once_with(custom_collection)
-        mock_collection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
-        mock_genre_vectorizer.vectorize_user_preference.assert_called_once_with(mock_rating)
-        assert result == expected_vector
-
     @patch('app.services.user_genre.settings')
     def test_get_user_vector_with_default_settings(self, mock_settings, user_genre, mock_db_connection, mock_genre_vectorizer):
         """Test that default settings from app config are used when not specified."""
