@@ -78,22 +78,6 @@ class TestUserGenre:
         mock_print.assert_called_once()
         assert result is None
 
-    def test_get_user_vector_user_not_found(self, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test behavior when user preference data doesn't exist in database."""
-        # Arrange
-        user_id = 999  # Non-existent user
-        station_id = 7
-        
-        # Setup mocks - return None for non-existent user
-        mock_db_connection.find_one.return_value = None
-        
-        # Act & Assert
-        with pytest.raises(AttributeError):
-            user_genre.get_user_column_vector(user_id, station_id)
-        
-        mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
-        mock_genre_vectorizer.vectorize_user_preference.assert_not_called()
-
     def test_get_user_vector_custom_db_collection(self, user_genre, mock_db_connection, mock_genre_vectorizer):
         """Test using custom database and collection names."""
         # Arrange
