@@ -1,13 +1,33 @@
+# app/main.py
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
-
 from app.api.main import api_router
+
+from app.services.recommendation import RecommendationService
+
+recommendation_service = RecommendationService()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager to handle startup and shutdown events
+    """
+    # Startup event
+    try:
+        print("Loading recommendation model...")
+        recommendation_service.refresh_model()
+        print("Recommendation model loaded successfully")
+    except Exception as e:
+        print(f"Error loading recommendation model: {e}")
+    
+    yield
 
 app = FastAPI(
     title="Recommendation API",
     description="API for recommendation system",
-    version="1.0.0",
+    version="1.0.5",
     openapi_url="/api/v1/openapi.json",
 )
 

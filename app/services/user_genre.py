@@ -18,6 +18,10 @@ class UserGenre:
         collection = database[collection_name]
 
         user_preference = collection.find_one({"UserID": userID, "StationID": stationID})
+        if user_preference is None:
+            print(f"Error: No user preference data available for UserID: {userID}, StationID: {stationID}")
+            return None
+
         rating = user_preference.get("rating", None)
         if rating is None:
             print(f"Error: No user preference data available for UserID: {userID}, StationID: {stationID}")

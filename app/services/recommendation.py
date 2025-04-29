@@ -64,19 +64,23 @@ class RecommendationService:
         if not self.is_trained:
             self.initialize_model()
 
-        user_vector = self.user_genre_service.get_user_column_vector(userID, stationID)
+        n2_recommendations = 4 * n_recommendations
 
+        user_vector = self.user_genre_service.get_user_column_vector(userID, stationID)
+        
+        # TODO Filter out games that the user has already rated
         # Check if user vector is None (user has no valid ratings)
         if user_vector is None:
-            return self.get_trending_games(n_recommendations)
-        else:
             # TODO if user has no valid ratings, return trending games or random games
-            pass
+            user_vector = self.user_genre_service.get_user_column_vector(1, 1)
         user_vector_2d = user_vector.reshape(1, -1)
         # breakpoint()
         distances, indices = self.recommender.kneighbors(
             user_vector_2d, 
-            n_neighbors=min(n_recommendations, len(self.game_ids))
+            n_neighbors=min(n2_recommendations, len(self.game_ids))
         )
         recommended_games = [int(self.game_ids[idx]) for idx in indices[0]]
-        return recommended_games
+        # random shuffle recommended_games
+        np.random.shuffle(recommended_games)
+
+        return recommended_games[:n_recommendations]
