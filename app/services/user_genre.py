@@ -9,26 +9,48 @@ from app.services.genre_vectorizer import GenreVectorizer
 
 class UserGenre:    
     def __init__(self):
-        pass
-    
-    def get_user_column_vector(self, userID: int, stationID: int, db_name: str = settings.DB_NAME, collection_name: str = "game_feedback") -> Dict[int, Dict[str, int]]:
-        """Get and cache game genres."""
+        user_preference = None
+        self.rating = None
+        self.genre_vectorizer_service = GenreVectorizer()
+
+    def load_ratings(self, userID: int, stationID: int, db_name: str = settings.DB_NAME, collection_name: str = "game_feedback") -> bool:
+        """Load user ratings from the database."""
         mongo = MongoDBSingleton()
         database = mongo.get_database(db_name)
         collection = database[collection_name]
 
         user_preference = collection.find_one({"UserID": userID, "StationID": stationID})
         if user_preference is None:
-            print(f"Error: No user preference data available for UserID: {userID}, StationID: {stationID}")
-            return None
+            ## TODO suppose to raise an exception, but for now just print the error message and return use default ratings
+            user_preference = collection.find_one({"UserID": 1, "StationID": 1})
+            # return None
 
-        rating = user_preference.get("rating", None)
-        if rating is None:
-            print(f"Error: No user preference data available for UserID: {userID}, StationID: {stationID}")
-            return None
+        self.rating = user_preference.get("rating", None)
+        if self.rating is None:
+            
+            ## TODO suppose to raise an exception, but for now just print the error message and return use default ratings
+            user_preference = collection.find_one({"UserID": 1, "StationID": 1})
+            self.rating = user_preference.get("rating", None)
+            if self.rating is None:
+                print(f"Error: No user preference data available for UserID: 1, StationID: 1")
+                return False
+            # TODO return None
 
-        genre_vectorizer_service = GenreVectorizer()
-        user_vector = genre_vectorizer_service.vectorize_user_preference(rating)
+        return True
+    
+    def get_user_column_vector(self) -> Dict[int, Dict[str, int]]:
+        """Get and cache game genres."""
+        user_vector = self.genre_vectorizer_service.vectorize_user_preference(self.rating)
         return user_vector
     
-    
+    def get_rated_geme_list(self):
+        if self.rating is None:
+            print("Error: No rating data available. Call load_ratings first.")
+            return []
+        
+        # extract AppID from user
+        # if unsuccessful, raise an exception
+        try:
+            return [int(rating.get("AppID")) for rating in self.rating]
+        except ValueError as e:
+            raise ValueError(f"Invalid game ID in rating data: {e}")

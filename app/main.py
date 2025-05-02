@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Recommendation API",
     description="API for recommendation system",
-    version="1.0.5",
+    version="1.1.3",
     openapi_url="/api/v1/openapi.json",
 )
 
@@ -40,7 +40,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
