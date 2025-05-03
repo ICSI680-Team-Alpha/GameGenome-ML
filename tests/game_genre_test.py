@@ -1,20 +1,16 @@
-# tests/game_genre_test.py
-
+# tests/user_genre_test.py
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 from app.services.game_genre import GameGenre
 from app.services.genre_vectorizer import GenreVectorizer
 
 
 @pytest.fixture
-def ethereal_genre_tapestry():
-    """
-    Conjures a mesmerizing tableau of genre classifications
-    that dances between worlds of digital entertainment.
-    """
+def sample_genre_data():
+    """Sample genre data from database"""
     return [
         {"AppID": 10, "genre": {"action": 1, "adventure": 0.8, "rpg": 0.5, "indie": 0.3}},
         {"AppID": 20, "genre": {"strategy": 1, "simulation": 0.7, "puzzle": 0.4}},
@@ -24,12 +20,9 @@ def ethereal_genre_tapestry():
 
 
 @pytest.fixture
-def crystallized_vector_formation():
-    """
-    Manifests the expected paradigm of genre vectors,
-    meticulously structured for algorithmic consumption.
-    """
-    kaleidoscopic_data = {
+def sample_vectorized_data():
+    """Sample vectorized genre data"""
+    return pd.DataFrame({
         "AppID": [10, 20, 30, 40],
         "action": [1, 0, 0.6, 0],
         "adventure": [0.8, 0, 0, 0.6],
@@ -43,16 +36,12 @@ def crystallized_vector_formation():
         "competitive": [0, 0, 0.5, 0],
         "horror": [0, 0, 0, 0.9],
         "survival": [0, 0, 0, 1]
-    }
-    return pd.DataFrame(kaleidoscopic_data)
+    })
 
 
 @pytest.fixture
-def dimensional_feature_constellation():
-    """
-    Orchestrates a numerical symphony of feature matrices,
-    where each row illuminates a unique digital experience.
-    """
+def sample_feature_matrix():
+    """Sample feature matrix without AppID column"""
     return np.array([
         [1, 0.8, 0.5, 0.3, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 1, 0.7, 0.4, 0, 0, 0, 0, 0],
@@ -62,28 +51,18 @@ def dimensional_feature_constellation():
 
 
 @pytest.fixture
-def celestial_normalized_patterns(dimensional_feature_constellation):
-    """
-    Transforms raw dimensional data into harmonious normalized patterns,
-    where magnitudes whisper of unity and direction speaks of essence.
-    """
-    cosmic_norms = np.linalg.norm(dimensional_feature_constellation, axis=1)
-    cosmic_norms[cosmic_norms == 0] = 1e-10  # A whisper in the void to avoid division by zero
-    return dimensional_feature_constellation / cosmic_norms[:, np.newaxis]
+def sample_normalized_matrix(sample_feature_matrix):
+    """Sample normalized matrix"""
+    norms = np.linalg.norm(sample_feature_matrix, axis=1)
+    norms[norms == 0] = 1e-10  # Avoid division by zero
+    return sample_feature_matrix / norms[:, np.newaxis]
 
 
 class TestGameGenre:
-    """
-    Test class for GameGenre,
-    weaving through its singleton implementation and data transformation capabilities.
-    """
+    """Test class for GameGenre service"""
     
     def setup_method(self):
-        """
-        Cleanses the canvas before each artistic test,
-        ensuring the singleton's sanctity remains unblemished.
-        """
-        # Dramatic erasure of previous states
+        """Reset singleton state before each test"""
         GameGenre._instance = None
         GameGenre._genre_cache = None
         GameGenre._game_ids = None
@@ -91,109 +70,97 @@ class TestGameGenre:
         GameGenre._normalized_matrix = None
     
     def test_singleton_pattern(self):
-        """
-        Validates the GameGenre's adherence to the ancient singleton pattern.
-        Through creation and comparison, we unveil the truth of its singularity.
-        """
-        # Create an illusion where database calls are mere shadows
+        """Test that GameGenre follows the singleton pattern"""
+        # Mock get_genres to avoid actual DB calls
         with patch.object(GameGenre, 'get_genres') as mock_get_genres:
             mock_get_genres.return_value = (None, None, None, None)
             
-            # The first manifestation emerges from the void
-            first_incarnation = GameGenre()
+            # First instance
+            first_instance = GameGenre()
             
-            # The second call should summon the same entity, not a doppelgänger
-            second_incarnation = GameGenre()
+            # Second instance should be the same object
+            second_instance = GameGenre()
             
-            # Behold! They are one and the same
-            assert first_incarnation is second_incarnation
+            # Assert they are the same instance
+            assert first_instance is second_instance
             
-            # The sacred method was invoked exactly once, as the prophecy foretold
+            # get_genres should only be called once during initialization
             mock_get_genres.assert_called_once()
 
-    def test_get_genres(self, ethereal_genre_tapestry, crystallized_vector_formation, 
-                      dimensional_feature_constellation, celestial_normalized_patterns):
-        """
-        Examines the mystical process of genre collection and transformation.
-        Through mocked realms, we trace the path from raw data to enlightened representations.
-        """
-        # Summon the phantom of MongoDB
-        spectral_mongo = MagicMock()
-        enchanted_collection = MagicMock()
-        mystical_db = {'steam_genre': enchanted_collection}
-        arcane_cursor = MagicMock()
+    def test_get_genres(self, sample_genre_data, sample_vectorized_data, 
+                      sample_feature_matrix, sample_normalized_matrix):
+        """Test the get_genres method with mocked dependencies"""
+        # Mock MongoDB
+        mock_mongo = MagicMock()
+        mock_collection = MagicMock()
+        mock_db = {'steam_genre': mock_collection}
+        mock_cursor = MagicMock()
         
-        # Enchant the mocks with specific behaviors
-        arcane_cursor.sort.return_value = ethereal_genre_tapestry
-        enchanted_collection.find.return_value = arcane_cursor
-        spectral_mongo.get_database.return_value = mystical_db
+        # Configure mocks
+        mock_cursor.sort.return_value = sample_genre_data
+        mock_collection.find.return_value = mock_cursor
+        mock_mongo.get_database.return_value = mock_db
         
-        # Create a protected realm where external forces are controlled
-        with patch('app.services.game_genre.MongoDBSingleton', return_value=spectral_mongo), \
+        # Patch dependencies
+        with patch('app.services.game_genre.MongoDBSingleton', return_value=mock_mongo), \
              patch.object(GenreVectorizer, 'vectorize_game') as mock_vectorize, \
              patch.object(GenreVectorizer, 'build_game_feature_matrix') as mock_build_matrix, \
              patch.object(GenreVectorizer, 'normalize_matrix') as mock_normalize:
             
-            # Infuse the vectorizer with predicted outcomes
-            mock_vectorize.return_value = crystallized_vector_formation
-            mock_build_matrix.return_value = (np.array([1, 2, 3, 4]), dimensional_feature_constellation)
-            mock_normalize.return_value = celestial_normalized_patterns
+            # Configure vectorizer mocks
+            mock_vectorize.return_value = sample_vectorized_data
+            mock_build_matrix.return_value = (np.array([10, 20, 30, 40]), sample_feature_matrix)
+            mock_normalize.return_value = sample_normalized_matrix
             
-            # The moment of creation - when GameGenre awakens and calls forth its genres
-            game_genre_oracle = GameGenre()
+            # Create instance and trigger get_genres
+            game_genre = GameGenre()
             
-            # Verify the sacred rituals were performed precisely
-            enchanted_collection.find.assert_called_once_with({}, {"_id": 0})
-            arcane_cursor.sort.assert_called_once_with("AppID", 1)
+            # Verify all expected calls were made
+            mock_collection.find.assert_called_once_with({}, {"_id": 0})
+            mock_cursor.sort.assert_called_once_with("AppID", 1)
             mock_vectorize.assert_called_once()
-            mock_build_matrix.assert_called_once_with(crystallized_vector_formation)
-            mock_normalize.assert_called_once_with(dimensional_feature_constellation)
+            mock_build_matrix.assert_called_once_with(sample_vectorized_data)
+            mock_normalize.assert_called_once_with(sample_feature_matrix)
             
-            # Confirm the artifacts were preserved in their intended sanctuaries
-            pd.testing.assert_frame_equal(game_genre_oracle._genre_cache, crystallized_vector_formation)
-            np.testing.assert_array_equal(game_genre_oracle._game_ids, np.array([1, 2, 3, 4]))
-            np.testing.assert_array_equal(game_genre_oracle._feature_matrix, dimensional_feature_constellation)
-            np.testing.assert_array_equal(game_genre_oracle._normalized_matrix, celestial_normalized_patterns)
+            # Verify instance attributes are set correctly
+            pd.testing.assert_frame_equal(game_genre._genre_cache, sample_vectorized_data)
+            np.testing.assert_array_equal(game_genre._game_ids, np.array([10, 20, 30, 40]))
+            np.testing.assert_array_equal(game_genre._feature_matrix, sample_feature_matrix)
+            np.testing.assert_array_equal(game_genre._normalized_matrix, sample_normalized_matrix)
 
-    def test_get_multiple_genres(self, ethereal_genre_tapestry, crystallized_vector_formation):
-        """
-        Investigates the selective harvesting of specific genre constellations.
-        A dance of filters and transformations that yields focused insights.
-        """
-        # First, create a mirage of the initialization process
+    def test_get_multiple_genres(self, sample_genre_data, sample_vectorized_data):
+        """Test the get_multiple_genres method"""
+        # First initialize with mocked get_genres
         with patch.object(GameGenre, 'get_genres') as mock_get_genres:
             mock_get_genres.return_value = (None, None, None, None)
+            game_genre = GameGenre()
             
-            # The entity takes form
-            genre_curator = GameGenre()
+            # Now test get_multiple_genres
+            mock_mongo = MagicMock()
+            mock_collection = MagicMock()
+            mock_db = {'steam_genre': mock_collection}
+            mock_cursor = MagicMock()
             
-            # Now, construct the apparatus for testing selective retrieval
-            phantom_mongo = MagicMock()
-            enchanted_collection = MagicMock()
-            mystical_db = {'steam_genre': enchanted_collection}
-            arcane_cursor = MagicMock()
+            # Use subset of data for specific IDs
+            selected_games = sample_genre_data[:2]  # First two games
+            mock_cursor.sort.return_value = selected_games
+            mock_collection.find.return_value = mock_cursor
+            mock_mongo.get_database.return_value = mock_db
             
-            # Program the phantoms with specific behaviors
-            chosen_games = ethereal_genre_tapestry[:2]  # Select only the first two mystical games
-            arcane_cursor.sort.return_value = chosen_games
-            enchanted_collection.find.return_value = arcane_cursor
-            phantom_mongo.get_database.return_value = mystical_db
-            
-            # Establish control over the external realms
-            with patch('app.services.game_genre.MongoDBSingleton', return_value=phantom_mongo), \
+            with patch('app.services.game_genre.MongoDBSingleton', return_value=mock_mongo), \
                  patch.object(GenreVectorizer, 'vectorize_game') as mock_vectorize:
                 
-                # Prepare the expected transformation result
-                chosen_vectors = crystallized_vector_formation.iloc[:2].reset_index(drop=True)
-                mock_vectorize.return_value = chosen_vectors
+                # Expected result - first two rows
+                expected_result = sample_vectorized_data.iloc[:2].reset_index(drop=True)
+                mock_vectorize.return_value = expected_result
                 
-                # Invoke the method under scrutiny
-                illuminated_result = genre_curator.get_multiple_genres([1, 2])
+                # Call the method with two AppIDs
+                result = game_genre.get_multiple_genres([10, 20])
                 
-                # Verify the ritual was performed with precision
-                enchanted_collection.find.assert_called_with({"AppID": {"$in": [1, 2]}}, {"_id": 0})
-                arcane_cursor.sort.assert_called_with("AppID", 1)
+                # Verify method calls
+                mock_collection.find.assert_called_with({"AppID": {"$in": [10, 20]}}, {"_id": 0})
+                mock_cursor.sort.assert_called_with("AppID", 1)
                 mock_vectorize.assert_called_once()
                 
-                # Confirm the result matches our prophesied outcome
-                pd.testing.assert_frame_equal(illuminated_result, chosen_vectors)
+                # Verify result
+                pd.testing.assert_frame_equal(result, expected_result)
