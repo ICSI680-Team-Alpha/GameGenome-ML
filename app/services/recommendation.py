@@ -6,7 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.services.game_genre import GameGenre
 from app.services.user_genre import UserGenre
 from sklearn.neighbors import NearestNeighbors
-
+from app.services.recommendation_filter import RecommendationFilter
 
 class RecommendationService:
     _instance = None
@@ -48,6 +48,41 @@ class RecommendationService:
         self.is_trained = True
         print("Recommendation model initialized.")
 
+    def get_recommendations_for_user(self, userID: int, stationID: int, n_recommendations: int = 5) -> list:
+        """
+        Get game recommendations for a specific user based on their preferences.
+        """
+        if not self.is_trained:
+            self.initialize_model()
+
+        # Load user ratings
+        user_genre_service = UserGenre()
+        if not user_genre_service.load_ratings(userID, stationID):
+            # TODO if user has no valid ratings, return trending games or random games
+            user_genre_service.load_ratings(1, 1)
+        user_vector = user_genre_service.get_user_column_vector()
+        rating_list = user_genre_service.get_rated_geme_list()
+        # if rating_list is empty, raise an exception
+        if not rating_list:
+            raise ValueError("No rated games available for recommendations.")
+        if user_vector is None:
+            raise ValueError("User vector is None. Cannot generate recommendations.")
+        
+        # TODO Filter out games that the user has already rated
+        distances, indices = self.recommender.kneighbors(
+            user_vector, 
+            n_neighbors=min(n_recommendations*2+len(rating_list), len(self.game_ids))
+        )
+        # if indices is empty, raise an exception
+        if indices.size == 0:
+            raise ValueError("No similar games found for the user.")
+        similar_games = [int(self.game_ids[idx]) for idx in indices[0]]
+        recommendation_filter = RecommendationFilter(similar_games=similar_games, rated_games=rating_list)
+        recommended_games = recommendation_filter.get_recommendations(n_recommendations=n_recommendations)
+        
+        print(f"Recommended games for UserID {userID}, StationID {stationID}: {recommended_games}")
+        return recommended_games[:n_recommendations]
+    
     def refresh_model(self) -> None:
         """
         Force a refresh of the recommendation model.
@@ -56,31 +91,3 @@ class RecommendationService:
         self.is_trained = False
         self.initialize_model(force_rebuild=True)
         print("Recommendation model refreshed.")
-
-    def get_recommendations_for_user(self, userID: int, stationID: int, n_recommendations: int = 5) -> list:
-        """
-        Get game recommendations for a specific user based on their preferences.
-        """
-        if not self.is_trained:
-            self.initialize_model()
-
-        n2_recommendations = 4 * n_recommendations
-
-        user_vector = self.user_genre_service.get_user_column_vector(userID, stationID)
-        
-        # TODO Filter out games that the user has already rated
-        # Check if user vector is None (user has no valid ratings)
-        if user_vector is None:
-            # TODO if user has no valid ratings, return trending games or random games
-            user_vector = self.user_genre_service.get_user_column_vector(1, 1)
-        user_vector_2d = user_vector.reshape(1, -1)
-        # breakpoint()
-        distances, indices = self.recommender.kneighbors(
-            user_vector_2d, 
-            n_neighbors=min(n2_recommendations, len(self.game_ids))
-        )
-        recommended_games = [int(self.game_ids[idx]) for idx in indices[0]]
-        # random shuffle recommended_games
-        np.random.shuffle(recommended_games)
-
-        return recommended_games[:n_recommendations]

@@ -17,12 +17,19 @@ class TestMongoDBSingleton:
         MongoDBSingleton._instance = None
         MongoDBSingleton._client = None
         
+        # Disable test environment detection for these tests
+        old_value = MongoDBSingleton._disable_test_handling
+        MongoDBSingleton._disable_test_handling = True
+        
         # Run the test
         yield
         
         # Reset after test
         MongoDBSingleton._instance = None
         MongoDBSingleton._client = None
+        
+        # Restore test environment detection setting
+        MongoDBSingleton._disable_test_handling = old_value
 
     @patch('app.core.db.MongoClient')
     def test_singleton_pattern(self, mock_mongo_client, reset_singleton):
@@ -114,14 +121,12 @@ class TestMongoDBSingleton:
         mock_mongo_client.return_value = mock_client
         mock_client.admin.command.side_effect = ConnectionFailure("Connection lost")
         
-        # Create instance
-        db = MongoDBSingleton()
-        
-        # Reset the side effect to allow initialization
+        # Create instance - temporarily disable the side effect to initialize
         mock_client.admin.command.side_effect = None
         mock_client.admin.command.return_value = True
+        db = MongoDBSingleton()
         
-        # Now set side effect for connection check
+        # Now restore the side effect for the actual test
         mock_client.admin.command.side_effect = ConnectionFailure("Connection lost")
         
         # Assert connection check fails
@@ -133,6 +138,7 @@ class TestMongoDBSingleton:
         # Mock the MongoClient instance
         mock_client = MagicMock()
         mock_mongo_client.return_value = mock_client
+        mock_client.admin.command.return_value = True
         
         # Create a singleton instance
         instance = MongoDBSingleton()
@@ -146,6 +152,7 @@ class TestMongoDBSingleton:
         # Mock the MongoClient instance
         mock_client = MagicMock()
         mock_mongo_client.return_value = mock_client
+        mock_client.admin.command.return_value = True
         
         # Mock the database access using dictionary-style access
         mock_db = MagicMock()
@@ -165,6 +172,7 @@ class TestMongoDBSingleton:
         # Mock the MongoClient instance
         mock_client = MagicMock()
         mock_mongo_client.return_value = mock_client
+        mock_client.admin.command.return_value = True
         
         # Create a singleton instance and then close it
         instance = MongoDBSingleton()
@@ -180,10 +188,14 @@ class TestMongoDBSingleton:
     @patch('app.core.db.MongoClient')
     def test_reinitialize_after_close(self, mock_mongo_client, reset_singleton):
         """Test that client is reinitialized after closing."""
-        # Mock the MongoClient instance
+        # Mock the MongoClient instance with multiple return values
         mock_client1 = MagicMock()
         mock_client2 = MagicMock()
         mock_mongo_client.side_effect = [mock_client1, mock_client2]
+        
+        # Configure both mocks to handle ping
+        mock_client1.admin.command.return_value = True
+        mock_client2.admin.command.return_value = True
         
         # Create a singleton instance and then close it
         instance1 = MongoDBSingleton()
@@ -196,4 +208,4 @@ class TestMongoDBSingleton:
         assert mock_mongo_client.call_count == 2
         
         # Assert the new instance has a new client
-        assert instance2.client is mock_client2
+        assert instance2._client is mock_client2

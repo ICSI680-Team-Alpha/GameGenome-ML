@@ -1,146 +1,215 @@
-# test_user_genre.py
-
+# tests/user_genre_test.py
 import pytest
-from unittest.mock import patch, MagicMock, Mock
-import pandas as pd
-from typing import Dict, Any
+import numpy as np
+from unittest.mock import patch, MagicMock
 
 from app.services.user_genre import UserGenre
-from app.services.genre_vectorizer import GenreVectorizer
-from app.core.db import MongoDBSingleton
 
 
 class TestUserGenre:
-    """Test suite for UserGenre class to ensure proper functionality of all methods."""
-
+    """Test suite for UserGenre service"""
+    
     @pytest.fixture
-    def user_genre(self):
-        """Fixture to create a fresh UserGenre instance for each test."""
+    def user_genre_service(self):
+        """Create a fresh UserGenre instance for each test"""
         return UserGenre()
-
+    
     @pytest.fixture
-    def mock_db_connection(self):
-        """Fixture to create a mock database connection."""
-        mongo_mock = MagicMock()
-        database_mock = MagicMock()
-        collection_mock = MagicMock()
+    def mock_mongodb(self):
+        """Setup mock MongoDB connection"""
+        mock_mongo = MagicMock()
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
         
-        mongo_mock.get_database.return_value = database_mock
-        database_mock.__getitem__.return_value = collection_mock
+        mock_mongo.get_database.return_value = mock_db
+        mock_db.__getitem__.return_value = mock_collection
         
-        with patch('app.services.user_genre.MongoDBSingleton', return_value=mongo_mock):
-            yield collection_mock
-
+        with patch('app.services.user_genre.MongoDBSingleton', return_value=mock_mongo):
+            yield mock_collection
+    
     @pytest.fixture
-    def mock_genre_vectorizer(self):
-        """Fixture to create a mock GenreVectorizer.""" 
-        vectorizer_mock = MagicMock()
+    def sample_user_rating(self):
+        """Sample user rating data"""
+        return [
+            {
+                "RatingType": "positive",
+                "RatedDate": "2025-04-13T16:16:07.342Z",
+                "AppID": "10"
+            },
+            {
+                "RatingType": "negative",
+                "RatedDate": "2025-04-13T16:16:07.342Z",
+                "AppID": "20"
+            }
+        ]
+    
+    def test_load_ratings_success(self, user_genre_service, mock_mongodb, sample_user_rating):
+        """Test successful loading of user ratings"""
+        # Setup
+        user_id = 1
+        station_id = 1
+        mock_mongodb.find_one.return_value = {
+            "UserID": user_id,
+            "StationID": station_id,
+            "rating": sample_user_rating
+        }
         
-        with patch('app.services.user_genre.GenreVectorizer', return_value=vectorizer_mock):
-            yield vectorizer_mock
-
-    def test_get_user_vector_success(self, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test successful retrieval and processing of user vector data."""
-        # Arrange
-        user_id = 42
-        station_id = 7
-        mock_rating = {"action": 5, "adventure": 3, "rpg": 4}
-        expected_vector = {"genre_vector": {"action": 0.8, "adventure": 0.5, "rpg": 0.7}}
+        # Execute
+        result = user_genre_service.load_ratings(user_id, station_id)
         
-        # Setup mocks
-        mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-        mock_genre_vectorizer.vectorize_user_preference.return_value = expected_vector
+        # Verify
+        assert result is True
+        assert user_genre_service.rating == sample_user_rating
+        mock_mongodb.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
+    
+    def test_load_ratings_user_not_found(self, user_genre_service, mock_mongodb, sample_user_rating):
+        """Test fallback to default user when requested user not found"""
+        # Setup
+        user_id = 99
+        station_id = 99
+        # First call returns None, second call returns default user
+        mock_mongodb.find_one.side_effect = [
+            None,
+            {"UserID": 1, "StationID": 1, "rating": sample_user_rating}
+        ]
         
-        # Act
-        result = user_genre.get_user_column_vector(user_id, station_id)
+        # Execute
+        result = user_genre_service.load_ratings(user_id, station_id)
         
-        # Assert
-        mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
-        mock_genre_vectorizer.vectorize_user_preference.assert_called_once_with(mock_rating)
-        assert result == expected_vector
-
-    def test_get_user_vector_no_rating(self, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test behavior when user preference exists but has no rating data."""
-        # Arrange
-        user_id = 42
-        station_id = 7
+        # Verify
+        assert result is True
+        assert user_genre_service.rating == sample_user_rating
+        assert mock_mongodb.find_one.call_count == 2
+        mock_mongodb.find_one.assert_any_call({"UserID": user_id, "StationID": station_id})
+        mock_mongodb.find_one.assert_any_call({"UserID": 1, "StationID": 1})
+    
+    def test_load_ratings_no_rating(self, user_genre_service, mock_mongodb, sample_user_rating):
+        """Test fallback to default user when user found but has no rating"""
+        # Setup
+        user_id = 2
+        station_id = 2
+        # First call returns user without rating, second call returns default user
+        mock_mongodb.find_one.side_effect = [
+            {"UserID": user_id, "StationID": station_id},  # No rating field
+            {"UserID": 1, "StationID": 1, "rating": sample_user_rating}
+        ]
         
-        # Setup mocks - return document without rating
-        mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id}
+        # Execute
+        result = user_genre_service.load_ratings(user_id, station_id)
         
-        # Act
+        # Verify
+        assert result is True
+        assert user_genre_service.rating == sample_user_rating
+        assert mock_mongodb.find_one.call_count == 2
+        mock_mongodb.find_one.assert_any_call({"UserID": user_id, "StationID": station_id})
+        mock_mongodb.find_one.assert_any_call({"UserID": 1, "StationID": 1})
+    
+    def test_load_ratings_default_user_no_rating(self, user_genre_service, mock_mongodb):
+        """Test case when even default user has no rating data"""
+        # Setup
+        user_id = 2
+        station_id = 2
+        # Both calls return users without ratings
+        mock_mongodb.find_one.side_effect = [
+            {"UserID": user_id, "StationID": station_id},  # No rating field
+            {"UserID": 1, "StationID": 1}  # No rating field
+        ]
+        
+        # Execute
         with patch('builtins.print') as mock_print:
-            result = user_genre.get_user_column_vector(user_id, station_id)
+            result = user_genre_service.load_ratings(user_id, station_id)
         
-        # Assert
-        mock_db_connection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
-        mock_genre_vectorizer.vectorize_user_preference.assert_not_called()
+        # Verify
+        assert result is False
+        assert user_genre_service.rating is None
         mock_print.assert_called_once()
-        assert result is None
-
-    def test_get_user_vector_custom_db_collection(self, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test using custom database and collection names."""
-        # Arrange
-        user_id = 42
-        station_id = 7
-        custom_db = "test_database"
+        assert mock_mongodb.find_one.call_count == 2
+    
+    def test_load_ratings_custom_db_settings(self, user_genre_service):
+        """Test loading ratings with custom database settings"""
+        # Setup
+        user_id = 1
+        station_id = 1
+        custom_db = "test_db"
         custom_collection = "test_collection"
-        mock_rating = {"strategy": 5, "puzzle": 4}
-        expected_vector = {"genre_vector": {"strategy": 0.9, "puzzle": 0.7}}
+        sample_rating = [{"AppID": "10", "RatingType": "positive"}]
         
-        # Setup mocks
-        mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-        mock_genre_vectorizer.vectorize_user_preference.return_value = expected_vector
+        mock_mongo = MagicMock()
+        mock_db = MagicMock()
+        mock_collection = MagicMock()
         
-        # Act
-        with patch('app.services.user_genre.MongoDBSingleton') as mock_mongo_singleton:
-            mock_mongo = MagicMock()
-            mock_db = MagicMock()
-            mock_collection = MagicMock()
-            
-            mock_mongo_singleton.return_value = mock_mongo
-            mock_mongo.get_database.return_value = mock_db
-            mock_db.__getitem__.return_value = mock_collection
-            mock_collection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-            
-            result = user_genre.get_user_column_vector(user_id, station_id, db_name=custom_db, collection_name=custom_collection)
+        mock_mongo.get_database.return_value = mock_db
+        mock_db.__getitem__.return_value = mock_collection
+        mock_collection.find_one.return_value = {
+            "UserID": user_id,
+            "StationID": station_id,
+            "rating": sample_rating
+        }
         
-        # Assert
+        # Execute
+        with patch('app.services.user_genre.MongoDBSingleton', return_value=mock_mongo):
+            result = user_genre_service.load_ratings(user_id, station_id, custom_db, custom_collection)
+        
+        # Verify
+        assert result is True
+        assert user_genre_service.rating == sample_rating
         mock_mongo.get_database.assert_called_once_with(custom_db)
         mock_db.__getitem__.assert_called_once_with(custom_collection)
-        mock_collection.find_one.assert_called_once_with({"UserID": user_id, "StationID": station_id})
-        mock_genre_vectorizer.vectorize_user_preference.assert_called_once_with(mock_rating)
-        assert result == expected_vector
-
-    @patch('app.services.user_genre.settings')
-    def test_get_user_vector_with_default_settings(self, mock_settings, user_genre, mock_db_connection, mock_genre_vectorizer):
-        """Test that default settings from app config are used when not specified."""
-        # Arrange
-        user_id = 42
-        station_id = 7
-        mock_settings.DB_NAME = "test_db"
-        mock_rating = {"simulation": 3, "sports": 2}
-        expected_vector = {"genre_vector": {"simulation": 0.6, "sports": 0.4}}
+    
+    def test_get_user_column_vector(self, user_genre_service):
+        """Test retrieving user column vector"""
+        # Setup
+        sample_rating = [{"AppID": "10", "RatingType": "positive"}]
+        expected_vector = np.array([[0.1, 0.2, 0.3]])
         
-        # Setup mocks
-        mock_db_connection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-        mock_genre_vectorizer.vectorize_user_preference.return_value = expected_vector
+        user_genre_service.rating = sample_rating
+        mock_vectorizer = MagicMock()
+        mock_vectorizer.vectorize_user_preference.return_value = expected_vector
+        user_genre_service.genre_vectorizer_service = mock_vectorizer
         
-        # Act
-        with patch('app.services.user_genre.MongoDBSingleton') as mock_mongo_singleton:
-            mock_mongo = MagicMock()
-            mock_db = MagicMock()
-            mock_collection = MagicMock()
-            
-            mock_mongo_singleton.return_value = mock_mongo
-            mock_mongo.get_database.return_value = mock_db
-            mock_db.__getitem__.return_value = mock_collection
-            mock_collection.find_one.return_value = {"UserID": user_id, "StationID": station_id, "rating": mock_rating}
-            
-            result = user_genre.get_user_column_vector(user_id, station_id)
+        # Execute
+        result = user_genre_service.get_user_column_vector()
         
-        # Assert
-        mock_mongo.get_database.assert_called_once_with("test_db")
-        mock_db.__getitem__.assert_called_once_with("game_feedback")
-        assert result == expected_vector
+        # Verify
+        assert result is expected_vector
+        mock_vectorizer.vectorize_user_preference.assert_called_once_with(sample_rating)
+    
+    def test_get_rated_game_list_success(self, user_genre_service, sample_user_rating):
+        """Test retrieving list of rated games"""
+        # Setup
+        user_genre_service.rating = sample_user_rating
+        expected_game_ids = [10, 20]
         
+        # Execute
+        result = user_genre_service.get_rated_geme_list()
+        
+        # Verify
+        assert result == expected_game_ids
+    
+    def test_get_rated_game_list_no_rating(self, user_genre_service):
+        """Test behavior when no ratings are available"""
+        # Setup
+        user_genre_service.rating = None
+        
+        # Execute
+        with patch('builtins.print') as mock_print:
+            result = user_genre_service.get_rated_geme_list()
+        
+        # Verify
+        assert result == []
+        mock_print.assert_called_once()
+    
+    def test_get_rated_game_list_invalid_id(self, user_genre_service):
+        """Test behavior when rating contains invalid game ID"""
+        # Setup
+        user_genre_service.rating = [
+            {"AppID": "10"},  # Valid
+            {"AppID": "invalid"},  # Invalid
+            {"AppID": "30"}   # Valid
+        ]
+        
+        # Execute and Verify
+        with pytest.raises(ValueError) as exc_info:
+            user_genre_service.get_rated_geme_list()
+        
+        assert "Invalid game ID" in str(exc_info.value)
