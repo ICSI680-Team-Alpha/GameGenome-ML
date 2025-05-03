@@ -69,10 +69,8 @@ class RecommendationService:
             raise ValueError("User vector is None. Cannot generate recommendations.")
         
         # TODO Filter out games that the user has already rated
-        user_vector_2d = user_vector.reshape(1, -1)
-        # breakpoint()
         distances, indices = self.recommender.kneighbors(
-            user_vector_2d, 
+            user_vector, 
             n_neighbors=min(n_recommendations*2+len(rating_list), len(self.game_ids))
         )
         # if indices is empty, raise an exception

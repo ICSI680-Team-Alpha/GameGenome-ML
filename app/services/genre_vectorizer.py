@@ -124,6 +124,7 @@ class GenreVectorizer:
         
         # Normalize the user vector for cosine similarity
         user_vector = self.normalize_matrix(user_vector.reshape(1, -1))[0]
+        user_vector = user_vector.reshape(1, -1)
         return user_vector
     
     def normalize_matrix(self, vectors: np.ndarray) -> np.ndarray:
