@@ -19,7 +19,7 @@ class RecommendationService:
                 cls._instance = super(RecommendationService, cls).__new__(cls)
                 # Initialize instance attributes only once
                 cls._instance.game_genre_service = GameGenre()
-                cls._instance.user_genre_service = UserGenre()
+                cls._instance.user_genre_service = None
                 
                 cls._instance.game_ids = None
                 cls._instance.recommender = None
@@ -56,10 +56,13 @@ class RecommendationService:
             self.initialize_model()
 
         # Load user ratings
-        user_genre_service = UserGenre()
-        if not user_genre_service.load_ratings(userID, stationID):
-            # TODO if user has no valid ratings, return trending games or random games
-            user_genre_service.load_ratings(1, 1)
+        # try to convert the userID and stationID to int
+        try:
+            userID = int(userID)
+            stationID = int(stationID)
+        except ValueError:
+            raise ValueError("UserID and StationID must be integers.")
+        user_genre_service = UserGenre(userID, stationID)
         user_vector = user_genre_service.get_user_column_vector()
         rating_list = user_genre_service.get_rated_geme_list()
         # if rating_list is empty, raise an exception
